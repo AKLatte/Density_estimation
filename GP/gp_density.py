@@ -4,9 +4,10 @@ import random
 import numpy as np
 from copy import deepcopy
 import matplotlib.pyplot as plt
+from scipy import stats
 
 import input_data
-# import Spline
+import Spline
 
 MIN_DEPTH = 2  # 初期個体の最小の木の深さ
 MAX_DEPTH = 5  # 初期個体の最大の木の深さ
@@ -61,10 +62,19 @@ class Tree(list):
 
 
 def generate_dataset(dataset):
-    x, y = dataset[:, 1], dataset[:, 0]
-    # x, y = Spline.new_knots, Spline.new_y_est  # スプライン節点の座標データ
-
-    return x, y
+    all_data = []
+    data = []
+    knots = []
+    for i, j in zip(dataset[:, 1], dataset[:, 0]):
+        all_data.append([i, j])
+        data.append([i, j])
+    for i, j in zip(Spline.new_knots, Spline.new_y_est): # スプライン節点座標のデータを追加
+        all_data.append([i, j])
+        knots.append([i, j])
+    data, knots = np.array(data), np.array(knots)
+    sorted_data = np.array(sorted(all_data, key=lambda x: x[0]))
+    return data[:,0], data[:, 1], knots[:, 0], knots[:, 1], sorted_data
+    # return sorted_data[:, 0], sorted_data[:, 1]
 
 def calc_var(num):
     total = sum(num)
@@ -101,7 +111,7 @@ def makeNodeSet():
     nodeSet.append(("sub",np.subtract,2))
     nodeSet.append(("mul",np.multiply,2))
     nodeSet.append(("div",protectedDiv,2))
-    # nodeSet.append(("pow",np.power,2))
+    nodeSet.append(("pow",np.power,2))
     nodeSet.append(("sin",np.sin,1))
     nodeSet.append(("cos",np.cos,1))
     nodeSet.append(("tan",np.tan,1))
@@ -213,12 +223,14 @@ def initial_population(N,nodeSet,leafSet,_min,_max):
         population.append(tree)
     return population
 
-def evaluate(population,nodeSet,leafSet,x,y):
+def evaluate(population,nodeSet,leafSet,x,y, xknots, yknots):
+    M = 10000
     for tree in population:
         if tree.fitness == None:
             _y = get_y(tree,nodeSet,leafSet,x)
+            _y2 = get_y(tree,nodeSet, leafSet, xknots)  # スプライン節点における生成関数の値
             # fitness = var * ((_y - y) ** 2)
-            fitness = np.sum(np.abs(_y - y))
+            fitness = M * np.sum(np.abs(_y2 - yknots)) + np.sum(np.abs(_y - y))
             tree.fitness = fitness
 
 def select(population,M):
@@ -271,6 +283,7 @@ def makeGraph(tree,x,y,nodeSet,leafSet):
     _y = get_y(tree,nodeSet,leafSet,x)
     plt.plot(x,y,label="TRUE")
     plt.plot(x,_y,label="GP")
+    plt.plot(x, stats.norm.pdf(x, loc=607.7, scale=169.2), label='NORM')
     plt.scatter(x, y, label="dataset")
     plt.legend(loc="upper left")
     plt.savefig("test.pdf")
@@ -289,19 +302,19 @@ def main():
         leafSet: 終端記号
         pupulation: 個体群
     """
-    random.seed(1009)
+    random.seed(1041)
     N = 500
     M = 8
     maxG = 200
     Pcx = 0.5
     Pmut = 0.1
     nodeSet,leafSet = makeNodeSet()
-    x, y = generate_dataset(input_data.dataset)
+    x, y, xknots, yknots, alldata = generate_dataset(input_data.dataset)
 
     population = initial_population(N,nodeSet,leafSet, MIN_DEPTH, MAX_DEPTH)
     g = 0
     while True:
-        evaluate(population,nodeSet,leafSet,x,y)
+        evaluate(population,nodeSet,leafSet,x,y,xknots,yknots)
         printLog(population,g)
         if g == maxG:
             break
