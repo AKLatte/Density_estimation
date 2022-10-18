@@ -1,8 +1,6 @@
-import random
+list = [1, 2, 3, 4, 5]
 
-random.seed(1024)
-a = random.randint(1, 10)
-random.seed(1024)
-x = 1
-b = random.randint(1, 10)
-print(a, b)
+for i in range(len(list)-1):
+    print(i, i+1)
+
+print('end')

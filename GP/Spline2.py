@@ -8,7 +8,6 @@ from sklearn.pipeline import Pipeline
 
 import input_data
 
-
 def get_natural_cubic_spline_model(x, y, minval=None, maxval=None, n_knots=None, knots=None):
     """
     Get a natural cubic spline model for the data.
@@ -143,98 +142,95 @@ class NaturalCubicSpline(AbstractSpline):
         return X_spl
 
 
-def func(x):
-    return 1/(1+25*x**2)
-
-
 def print_value(y):
     print('yi = [{}]'.format(y))
 
+def calc_error(y, yest):
+    return np.abs(y - yest)
 
-def calc_residual(x, y, y_est, knots):
-    each_error = []   # 各節点間のデータと予測値の残差の絶対値
-    error = np.abs(y_est -y)
-    total = sum(error)
-    save_error, save_x = copy.copy(error), copy.copy(x)
 
+def calc_residual(x, y, residual, knots):
+    each_residual = []
+    save_x, save_residual = copy.copy(x), copy.copy(residual)
+    q = 0  # 節点間隔における残差の絶対値の総和
     for i in knots:
         count = 0
-        q = 0
         for j in x:
             if j < i:
-                q += error[count]
+                q += residual[count]
                 count += 1
             else:
-                each_error.append(q)
-                del x[:count], error[:count]
+                each_residual.append(q)
+                q = 0
+                x, residual = np.delete(x, np.s_[:count]), np.delete(residual, np.s_[:count])
+                break
+    if q == 0:
+        each_residual.append(sum(residual))
+    else:
+        each_residual.append(q)
+        each_residual.append(0)
+    x, residual = copy.copy(save_x), copy.copy(save_residual)  # x, residualのリセット
 
-    each_error.append(sum(error))
-    error, x = copy.copy(save_error), copy.copy(x)
+    return each_residual
 
-    return each_error
 
-def searchKnots(each_error, knots):
+def searchKnots(x, y, num, residual, old_knots): 
+    before_result = sum(residual)  # 節点配置変更前の残差の絶対値の総和(逐次更新される)
     while True:
-        before_result = sum(each_error)
-        for i in len(each_error):
-            if each_error[i] > each_error[i+1]:
-                knot = knots[i]
-                knots[i] += 50
-                new_residual = calc_residual(x, y, y_est, knots)
-                if sum(new_residual) >= sum(each_error):
-                    knots[i] = knot
-        after_result = sum(new_residual)
-        if before_result > after_result:
-            before_result = after_result
+        for i in range(len(residual)-1):
+            if residual[i] > residual[i+1]:   #Q_iとQ_(i+1)比較
+                save_knot = old_knots[i]
+                old_knots[i] += 5
+                if old_knots[i] >= 82.5:  # knotが最後のknotに追いついたとき
+                    old_knots[i] = save_knot
+                    continue
+                # knot更新時に次のknotの座標を超えてしまった場合の処理
+                old_knots = np.sort(old_knots)
+                # new_model: 節点配置変更後のスプライン関数
+                new_model, _ = get_natural_cubic_spline_model(x, y, minval=min(x), maxval=max(x), n_knots=num, knots=list(old_knots))
+                # update_residual: 節点配置変更後の残差Qのリスト
+                update_residual = calc_residual(x, y, calc_error(y, new_model.predict(x)), old_knots)
+                if sum(residual) > sum(update_residual):
+                    residual = update_residual
+                else:
+                    old_knots[i] = save_knot
+        if before_result - sum(residual) > 1e-9:
+            before_result = sum(residual)
         else:
             break
+
     
-    return knots
+    return old_knots
 
-
-
-
-def evaluate(x, y, y_est, knots):
-    error = np.abs(y_est - y)
-    total = sum(error)
-    while True:
-        for i in range(len(knots)):
-            if error[i] > error[i+1]:
-                knot = knots[i]
-                knots[i] += 40
-                model, _ = get_natural_cubic_spline_model(x, y, minval=min(x), maxval=max(x), n_knots=num, knots=list(knots))
-                new_error = np.abs(model.predict(x) - y)
-                if sum(error) < sum(new_error):
-                    knots[i] = knot
-        new_total = sum(new_error)
-        if total > new_total:
-            total = new_total
-        else:
-            break
-    
-    return total, knots, model
-        
 
 
 # make sample data
 x = input_data.dataset[:, 1]
 y = input_data.dataset[:, 0]
+num = 5
+model, knots = get_natural_cubic_spline_model(x, y, minval=min(x), maxval=max(x), n_knots=num)
+old_knots = copy.copy(knots)
+old_yknots = model.predict(old_knots)  # 節点の初期値(等間隔)
+old_yest = model.predict(x)  # 節点の初期値の下での各データに対するスプライン関数の予測値
+old_residual = calc_error(y, old_yest)  # 節点初期値の下でのスプライン関数S(xi)とデータyiの残差
+print("Sum of residual error: {}, knots: {}".format(sum(old_residual), old_knots))
+# 節点間隔の残差の絶対値を算出
+new_residual = calc_residual(x, y, old_residual, old_knots)
+# 節点配置の最適化
+new_knots = searchKnots(x, y, num, new_residual, old_knots)
 
-# The number of knots canbe used to control the amount of smooothness
-num = 8  # the number of knots
-model_5, knots = get_natural_cubic_spline_model(x, y, minval=min(x), maxval=max(x), n_knots=num)
-old_knots = copy.copy(knots)  # 初期の等間隔の節点
-print("Sum of residual error: {}, knots: {}".format(sum(np.abs(y - model_5.predict(x))), knots))
-y_est_5 = model_5.predict(x)
-error, new_knots, new_model = evaluate(x, y, y_est_5, knots)
-y_est = new_model.predict(x)
-new_y_est = new_model.predict(new_knots)  # 更新後のknotsにおける関数の出力値
-print('Sum of residual error: {}, new knots: {}'.format(error, new_knots))
+# 最適なスプライン関数
+opt_spline, opt_knots = get_natural_cubic_spline_model(x, y, minval=min(x), maxval=max(x), n_knots=num, knots=list(new_knots))
+opt_yest = opt_spline.predict(x)
+opt_residual = sum(calc_error(y, opt_yest))
+print('opt residual: {}'.format(opt_residual))
+print(old_knots)
 
-plt.plot(x, y, ls='', marker='.', label='originals')
-plt.plot(x, y_est_5, marker='.', label='model(n_knots= 6)')
-plt.plot(x, y_est, marker='.', label='new model(n_knots=6)', alpha=0.3)
-plt.scatter(old_knots, new_model.predict(old_knots), color='blue', alpha=0.3, label='init knot')
-plt.scatter(new_knots, new_model.predict(new_knots), color='red', label='new knot')
-# plt.plot(x, y_est_15, marker='.', label='n_knots = 15')
-plt.legend(); plt.show()
+if __name__ == "__main__":
+    plt.plot(x, y, ls='', marker='.', label='original')
+    plt.plot(x, old_yest, label='init spline')
+    # plt.plot(x, opt_spline.predict(x), label='opt spline')
+    plt.scatter(opt_knots, opt_spline.predict(opt_knots), label='opt knot')
+    plt.scatter(old_knots, model.predict(old_knots), label='old knot')
+    plt.legend()
+    plt.show()
