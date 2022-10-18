@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 from scipy import stats
 
 import input_data
-import Spline
+# import Spline
+import Spline2
 
 MIN_DEPTH = 2  # 初期個体の最小の木の深さ
 MAX_DEPTH = 5  # 初期個体の最大の木の深さ
@@ -66,11 +67,14 @@ def generate_dataset(dataset):
     data = []
     knots = []
     for i, j in zip(dataset[:, 1], dataset[:, 0]):
-        all_data.append([i, j])
-        data.append([i, j])
-    for i, j in zip(Spline.new_knots, Spline.new_y_est): # スプライン節点座標のデータを追加
+        all_data.append([i-2.5, j])
+        data.append([i-2.5, j])
+    for i, j in zip(Spline2.opt_knots, Spline2.opt_spline.predict(Spline2.opt_knots)):
+    # for i, j in zip(Spline.new_knots, Spline.new_y_est): # スプライン節点座標のデータを追加
         all_data.append([i, j])
         knots.append([i, j])
+    # knots.append([100, 0])
+    # knots.insert(0, [0, 0])
     data, knots = np.array(data), np.array(knots)
     sorted_data = np.array(sorted(all_data, key=lambda x: x[0]))
     return data[:,0], data[:, 1], knots[:, 0], knots[:, 1], sorted_data
@@ -111,7 +115,7 @@ def makeNodeSet():
     nodeSet.append(("sub",np.subtract,2))
     nodeSet.append(("mul",np.multiply,2))
     nodeSet.append(("div",protectedDiv,2))
-    nodeSet.append(("pow",np.power,2))
+    # nodeSet.append(("pow",np.power,2))
     nodeSet.append(("sin",np.sin,1))
     nodeSet.append(("cos",np.cos,1))
     nodeSet.append(("tan",np.tan,1))
@@ -224,13 +228,16 @@ def initial_population(N,nodeSet,leafSet,_min,_max):
     return population
 
 def evaluate(population,nodeSet,leafSet,x,y, xknots, yknots):
-    M = 10000
+    M = 10
+    E = 10
     for tree in population:
         if tree.fitness == None:
             _y = get_y(tree,nodeSet,leafSet,x)
             _y2 = get_y(tree,nodeSet, leafSet, xknots)  # スプライン節点における生成関数の値
             # fitness = var * ((_y - y) ** 2)
             fitness = M * np.sum(np.abs(_y2 - yknots)) + np.sum(np.abs(_y - y))
+            fitness = M * np.sum(np.abs(_y2 - yknots)) + E * (np.abs(_y[0] - y[0])) + E * (np.abs(_y[-1] - y[-1])) + np.sum(np.abs(_y[1:-1] - y[1:-1]))
+            # 各データ点における残差の総和(最後の結果比較で使用する)
             tree.fitness = fitness
 
 def select(population,M):
@@ -247,7 +254,7 @@ def crossover(population,Pcx):
         if random.random() < Pcx:
             childA = population[2*i]
             childB = population[2*i+1]
-            childA,childB = mate(childA,childB,17,"HEIGHT")
+            childA,childB = mate(childA,childB,9,"HEIGHT")
             population[2*i] = deepcopy(childA)
             population[2*i+1] = deepcopy(childB)
             population[2*i].fitness = None
@@ -259,7 +266,7 @@ def mutation(population,Pmut,nodeSet,leafSet):
     for i in range(len(population)):
         if random.random() < Pmut:
             child = population[i]
-            child = mutate(child,nodeSet,leafSet,17,"HEIGHT")
+            child = mutate(child,nodeSet,leafSet,9,"HEIGHT")
             population[i] = deepcopy(child)
             population[i].fitness = None
 
@@ -279,12 +286,25 @@ def printLog(population,g):
     print("ave   fitness : ",ave          ,"  ave nodes : ",ave_node)
     print("best  fitness : ",best.fitness, "  min nodes : ",min_node)
 
-def makeGraph(tree,x,y,nodeSet,leafSet):
+
+def calc_result(best, nodeSet, leafSet, x, y):
+    _y = get_y(best,nodeSet,leafSet,x)
+    norm_y = np.sum((stats.norm.pdf(x, loc=54, scale=21.2) - y) ** 2)
+    result = np.sum((_y - y) ** 2)
+    print("best of GP residual: {}".format(result))
+    print("norm residual: {}".format(norm_y))
+
+
+def makeGraph(tree,x,y,nodeSet,leafSet, xknots, yknots):
     _y = get_y(tree,nodeSet,leafSet,x)
     plt.plot(x,y,label="TRUE")
     plt.plot(x,_y,label="GP")
-    plt.plot(x, stats.norm.pdf(x, loc=607.7, scale=169.2), label='NORM')
+    plt.plot(x, stats.norm.pdf(x, loc=54, scale=21.2), label='NORM')
     plt.scatter(x, y, label="dataset")
+    plt.scatter(xknots, yknots, label='spline node')
+    plt.xlabel('Score')
+    plt.ylabel('Probability density')
+    # plt.grid(color='gray', ls='dotted', lw=0.5)
     plt.legend(loc="upper left")
     plt.savefig("test.pdf")
     plt.show()
@@ -302,7 +322,7 @@ def main():
         leafSet: 終端記号
         pupulation: 個体群
     """
-    random.seed(1041)
+    random.seed(1032)
     N = 500
     M = 8
     maxG = 200
@@ -324,6 +344,12 @@ def main():
         g+=1
     best = min(population,key=lambda tree:tree.fitness)
     print(best)
-    makeGraph(best,x,y,nodeSet,leafSet)
+    makeGraph(best,x,y,nodeSet,leafSet, xknots, yknots)
+    calc_result(best, nodeSet, leafSet, x, y)
 
 main()
+
+# for i in range(1016, 1050):
+#     random.seed(i)
+#     main()
+#     print("seed is {}".format(i))

@@ -71,7 +71,7 @@ def transformTexForm(array):
                 str_arr.append("")
     return "".join(str_arr)
 
-string = "add(sub(tan(x),sin(0)),add(div(sub(sub(add(div(sub(add(div(sub(sub(tan(tan(x)),div(x,div(sub(sub(tan(x),1),sqrt(1)),tan(x)))),sin(0)),pi),sub(tan(x),1)),sin(exp(div(sub(sub(tan(x),1),sqrt(1)),tan(x))))),pi),sub(tan(sub(tan(sub(sub(tan(x),div(sub(tan(x),div(x,tan(x))),tan(x))),sin(0))),exp(div(sub(sub(tan(x),1),sqrt(1)),sub(tan(x),div(sub(tan(x),div(div(x,tan(x)),tan(x))),tan(x))))))),exp(div(sub(sub(tan(x),1),sqrt(1)),tan(x))))),sqrt(1)),sqrt(1)),sin(e)),sub(add(div(sub(sub(sub(add(div(sub(sub(tan(x),div(sub(tan(x),div(x,tan(x))),tan(x))),sin(0)),pi),sub(add(div(tan(x),cos(e)),sub(tan(x),exp(sin(0.5)))),sqrt(1))),sqrt(1)),1),sin(0)),cos(e)),sub(x,exp(sin(sqrt(div(sub(sub(tan(x),1),sqrt(add(1,0.1))),tan(x))))))),sqrt(div(x,tan(x))))))"
+string = "div(sqrt(sub(x,1)),tan(0.5))"
 array = []
 s = ""
 for c in string:
